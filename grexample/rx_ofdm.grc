@@ -42,7 +42,7 @@
     </param>
     <param>
       <key>generate_options</key>
-      <value>qt_gui</value>
+      <value>no_gui</value>
     </param>
     <param>
       <key>hier_block_src_path</key>
@@ -616,7 +616,7 @@
     </param>
     <param>
       <key>delay</key>
-      <value>fft_len+fft_len/4</value>
+      <value>fft_len+fft_len/4 - 80 +50</value>
     </param>
     <param>
       <key>_enabled</key>
@@ -946,7 +946,7 @@
     </param>
     <param>
       <key>_enabled</key>
-      <value>True</value>
+      <value>0</value>
     </param>
     <param>
       <key>_coordinate</key>
@@ -2044,7 +2044,7 @@
     </param>
     <param>
       <key>gain</key>
-      <value>"manual"</value>
+      <value>"slow_attack"</value>
     </param>
     <param>
       <key>id</key>
@@ -2076,7 +2076,7 @@
     </param>
     <param>
       <key>bandwidth</key>
-      <value>100000</value>
+      <value>1000000</value>
     </param>
     <param>
       <key>samplerate</key>
@@ -2087,7 +2087,7 @@
     <key>qtgui_sink_x</key>
     <param>
       <key>bw</key>
-      <value>100000</value>
+      <value>1000000</value>
     </param>
     <param>
       <key>alias</key>
@@ -2111,11 +2111,11 @@
     </param>
     <param>
       <key>_enabled</key>
-      <value>True</value>
+      <value>0</value>
     </param>
     <param>
       <key>fftsize</key>
-      <value>0</value>
+      <value>1024</value>
     </param>
     <param>
       <key>_coordinate</key>
@@ -2214,7 +2214,7 @@
     </param>
     <param>
       <key>_enabled</key>
-      <value>True</value>
+      <value>0</value>
     </param>
     <param>
       <key>_coordinate</key>
