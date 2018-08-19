@@ -105,6 +105,33 @@
     </param>
     <param>
       <key>_coordinate</key>
+      <value>(347, 126)</value>
+    </param>
+    <param>
+      <key>_rotation</key>
+      <value>0</value>
+    </param>
+    <param>
+      <key>id</key>
+      <value>band_width</value>
+    </param>
+    <param>
+      <key>value</key>
+      <value>1000000</value>
+    </param>
+  </block>
+  <block>
+    <key>variable</key>
+    <param>
+      <key>comment</key>
+      <value></value>
+    </param>
+    <param>
+      <key>_enabled</key>
+      <value>True</value>
+    </param>
+    <param>
+      <key>_coordinate</key>
       <value>(181, -1)</value>
     </param>
     <param>
@@ -387,7 +414,7 @@
     </param>
     <param>
       <key>value</key>
-      <value>100000</value>
+      <value>1000000</value>
     </param>
   </block>
   <block>
@@ -523,7 +550,7 @@
     </param>
     <param>
       <key>_enabled</key>
-      <value>True</value>
+      <value>2</value>
     </param>
     <param>
       <key>_coordinate</key>
@@ -586,7 +613,7 @@
     </param>
     <param>
       <key>_coordinate</key>
-      <value>(168, 60)</value>
+      <value>(505, 293)</value>
     </param>
     <param>
       <key>_rotation</key>
@@ -1844,11 +1871,11 @@
     </param>
     <param>
       <key>bandwidth</key>
-      <value>1000000</value>
+      <value>band_width</value>
     </param>
     <param>
       <key>samplerate</key>
-      <value>1000000</value>
+      <value>samp_rate</value>
     </param>
   </block>
   <block>
