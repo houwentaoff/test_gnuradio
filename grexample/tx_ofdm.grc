@@ -117,7 +117,7 @@
     </param>
     <param>
       <key>value</key>
-      <value>1000000</value>
+      <value>20000000</value>
     </param>
   </block>
   <block>
@@ -935,7 +935,7 @@
     </param>
     <param>
       <key>_enabled</key>
-      <value>True</value>
+      <value>0</value>
     </param>
     <param>
       <key>_coordinate</key>
@@ -1930,7 +1930,7 @@
     </param>
     <param>
       <key>frequency</key>
-      <value>800000000</value>
+      <value>500000000</value>
     </param>
     <param>
       <key>bandwidth</key>

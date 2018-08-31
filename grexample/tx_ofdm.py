@@ -8,7 +8,7 @@
 # Title: OFDM Tx
 # Description: Example of an OFDM Transmitter
 #
-# Generated: Thu Aug 30 20:38:01 2018
+# Generated: Fri Aug 31 13:55:41 2018
 # GNU Radio version: 3.7.12.0
 ##################################################
 
@@ -46,12 +46,12 @@ class tx_ofdm(gr.top_block):
         self.header_mod = header_mod = digital.constellation_bpsk()
         self.hdr_format = hdr_format = digital.header_format_ofdm(occupied_carriers, 1, length_tag_key,)
         self.fft_len = fft_len = 64
-        self.band_width = band_width = 1000000
+        self.band_width = band_width = 20000000
 
         ##################################################
         # Blocks
         ##################################################
-        self.pluto_sink_0 = iio.pluto_sink('193.168.2.1', 800000000, samp_rate, band_width, 0x8000, False, 10.0, '', True)
+        self.pluto_sink_0 = iio.pluto_sink('193.168.2.1', 500000000, samp_rate, band_width, 0x8000, False, 10.0, '', True)
         self.fft_vxx_0 = fft.fft_vcc(fft_len, False, (()), True, 1)
         self.digital_protocol_formatter_bb_0 = digital.protocol_formatter_bb(hdr_format, length_tag_key)
         self.digital_ofdm_rx_0 = digital.ofdm_rx(
@@ -85,7 +85,6 @@ class tx_ofdm(gr.top_block):
         self.blocks_tagged_stream_mux_0 = blocks.tagged_stream_mux(gr.sizeof_gr_complex*1, length_tag_key, 0)
         self.blocks_tag_gate_0 = blocks.tag_gate(gr.sizeof_gr_complex * 1, False)
         self.blocks_tag_gate_0.set_single_key("")
-        self.blocks_tag_debug_1 = blocks.tag_debug(gr.sizeof_char*1, 'xxxxx', ""); self.blocks_tag_debug_1.set_display(True)
         self.blocks_tag_debug_0 = blocks.tag_debug(gr.sizeof_char*1, "Rx'd Packets", ""); self.blocks_tag_debug_0.set_display(True)
         self.blocks_stream_to_tagged_stream_0 = blocks.stream_to_tagged_stream(gr.sizeof_char, 1, packet_len, length_tag_key)
         self.blocks_repack_bits_bb_0_0 = blocks.repack_bits_bb(8, 1, length_tag_key, False, gr.GR_LSB_FIRST)
@@ -109,7 +108,6 @@ class tx_ofdm(gr.top_block):
         self.connect((self.digital_chunks_to_symbols_xx_0, 0), (self.blocks_tagged_stream_mux_0, 0))
         self.connect((self.digital_chunks_to_symbols_xx_0_0, 0), (self.blocks_tagged_stream_mux_0, 1))
         self.connect((self.digital_crc32_bb_0, 0), (self.blocks_repack_bits_bb_0, 0))
-        self.connect((self.digital_crc32_bb_0, 0), (self.blocks_tag_debug_1, 0))
         self.connect((self.digital_crc32_bb_0, 0), (self.digital_protocol_formatter_bb_0, 0))
         self.connect((self.digital_ofdm_carrier_allocator_cvc_0, 0), (self.fft_vxx_0, 0))
         self.connect((self.digital_ofdm_cyclic_prefixer_0, 0), (self.blocks_multiply_const_vxx_0, 0))
@@ -148,7 +146,7 @@ class tx_ofdm(gr.top_block):
 
     def set_samp_rate(self, samp_rate):
         self.samp_rate = samp_rate
-        self.pluto_sink_0.set_params(800000000, self.samp_rate, self.band_width, 10.0, '', True)
+        self.pluto_sink_0.set_params(500000000, self.samp_rate, self.band_width, 10.0, '', True)
 
     def get_rolloff(self):
         return self.rolloff
@@ -205,7 +203,7 @@ class tx_ofdm(gr.top_block):
 
     def set_band_width(self, band_width):
         self.band_width = band_width
-        self.pluto_sink_0.set_params(800000000, self.samp_rate, self.band_width, 10.0, '', True)
+        self.pluto_sink_0.set_params(500000000, self.samp_rate, self.band_width, 10.0, '', True)
 
 
 def main(top_block_cls=tx_ofdm, options=None):
