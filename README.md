@@ -10,5 +10,6 @@
 ### 关于`AD9363`
 
 ### 关于`gnuradio`
+* maillist `http://lists.gnu.org/archive/html/discuss-gnuradio/`
 
 ### 关于`ofdm`
