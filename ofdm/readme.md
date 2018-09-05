@@ -3,11 +3,15 @@
 ## 使用
 
 ### tx
-`python benchmark_tx.py -s 128 -M 0.1 -v`
+`python benchmark_tx.py -s 128 -M 0.1 -v`  
 `python send.py -v ` 接收用户输入并发送
 ### rx
-`python benchmark_rx.py  -v`
+`python benchmark_rx.py  -v`  
 `python recv.py  -v`
+
+### csmac + tx/rx
+`python tunnel.py -v`  
+`python ./tunnel.py  --ip=192.168.2.1 --nicname=tap1  -v`  
 
 ## 资源
 `https://blog.csdn.net/yuan1164345228/article/details/17584045`
