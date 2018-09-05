@@ -115,6 +115,7 @@ class my_top_block(gr.top_block):
         """
         Return True if the receive path thinks there's carrier
         """
+        print "carrier_sensed"
         return self.rxpath.carrier_sensed()
 
     def set_freq(self, target_freq):
@@ -158,6 +159,10 @@ class cs_mac(object):
         """
         if self.verbose:
             print "Rx: ok = %r  len(payload) = %4d" % (ok, len(payload))
+            if ok:
+                for c in payload:
+                    print hex(ord(c)),
+                print 
         if ok:
             os.write(self.tun_fd, payload)
 
@@ -168,10 +173,10 @@ class cs_mac(object):
 
         FIXME: may want to check for EINTR and EAGAIN and reissue read
         """
-        min_delay = 0.001               # seconds
+        min_delay = 0#0.001               # seconds
 
         while 1:
-            payload = os.read(self.tun_fd, 10*1024)
+            payload = os.read(self.tun_fd, 1500)#10*1024)
             if not payload:
                 self.tb.txpath.send_pkt(eof=True)
                 break
@@ -181,15 +186,16 @@ class cs_mac(object):
                 for c in payload:
                     print hex(ord(c)),
                 print 
-
+            '''
             delay = min_delay
             while self.tb.carrier_sensed():
                 sys.stderr.write('B')
                 time.sleep(delay)
                 if delay < 0.050:
                     delay = delay * 2       # exponential back-off
-
-            self.tb.txpath.send_pkt(payload)
+            '''
+            for i in range(0, 50):
+                self.tb.txpath.send_pkt(payload)
 
 
 # /////////////////////////////////////////////////////////////////////////////
