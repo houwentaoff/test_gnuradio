@@ -45,7 +45,7 @@ from transmit_path import transmit_path
 from gnuradio import iio
 import os, sys
 import random, time, struct
-
+import socket
 #print os.getpid()
 #raw_input('Attach and press enter')
 
@@ -76,7 +76,33 @@ def open_tun_interface(tun_device_filename, ifr_name):
     ifs = ioctl(tun, TUNSETIFF, struct.pack("16sH", ifr_name, mode))
     ifname = ifs[:16].strip("\x00")
     return (tun, ifname)
-    
+
+class nicutil(object):
+    @staticmethod
+    def get_ip(name):
+        from fcntl import ioctl
+        sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        ip=ioctl(sock.fileno(),0x8915,struct.pack('64s',name))
+        ip = ip[20:24]
+        '''
+        sip=socket.inet_ntoa(ip)
+        print "ip:", sip
+        '''
+        return ip
+    @staticmethod
+    def get_mac(name):
+        from fcntl import ioctl
+        sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        mac=ioctl(sock.fileno(),0x8927,struct.pack('64s',name))
+        mac = mac[18:24]
+        '''
+        print "mac:",
+        for c in mac:
+            print hex(ord(c)),
+        print 
+        '''
+        return mac
+
 
 # /////////////////////////////////////////////////////////////////////////////
 #                             the flow graph
@@ -141,10 +167,11 @@ class cs_mac(object):
     Of course, we're not restricted to getting packets via TUN/TAP, this
     is just an example.
     """
-    def __init__(self, tun_fd, verbose=False):
+    def __init__(self, tun_fd, name, verbose=False):
         self.tun_fd = tun_fd       # file descriptor for TUN/TAP interface
         self.verbose = verbose
         self.tb = None             # top block (access to PHY)
+        self.nic_name = name
 
     def set_flow_graph(self, tb):
         self.tb = tb
@@ -159,11 +186,66 @@ class cs_mac(object):
         """
         if self.verbose:
             print "Rx: ok = %r  len(payload) = %4d" % (ok, len(payload))
-            if ok:
-                for c in payload:
-                    print hex(ord(c)),
-                print 
         if ok:
+            for c in payload:
+                print "0x%.2x" % ord(c),
+            print 
+        if ok:
+            if ord(payload[12]) == 0x8 and ord(payload[13]) == 0x0 and ord(payload[23]) == 0x1 and ord(payload[34]) == 0x8: #icmp req
+                locmac = nicutil.get_mac(self.nic_name)
+                ip = nicutil.get_ip(self.nic_name)
+                dstmac = payload[:6]
+                srcmac = payload[6:12]
+                dstip = payload[30:34]
+                srcip = payload[26:30]
+                if dstmac == locmac and ip == dstip:#send to me
+                    data = struct.pack("!6s6sH", srcmac, dstmac, 0x0800)    
+                    data += payload[14:26]
+                    data += ip #26-30
+                    data += srcip #30-34
+                    data += chr(0x0) #34
+                    data += payload[35]
+                    (csum,) = struct.unpack("!H", payload[36:38])
+                    data += struct.pack("!H", 8+csum) #36 37
+                    if len(payload) > 38:
+                        data += payload[38:]
+                    print 'send icmp reply:'
+                    for c in data:
+                        print "0x%.2x" %ord(c),
+                    print
+                    for i in range(0, 50):
+                        self.tb.txpath.send_pkt(data)
+                    return
+
+            if ord(payload[12]) == 0x8 and ord(payload[13]) == 0x6: #arp
+                if ord(payload[16]) == 0x8 and ord(payload[17]) == 0x0 and ord(payload[20])==0x0 and ord(payload[21]) == 0x2:#ipv4 arp req
+                    print 'recv a arp reply'
+                if ord(payload[16]) == 0x8 and ord(payload[17]) == 0x0 and ord(payload[20])==0x0 and ord(payload[21]) == 0x1:#ipv4 arp req
+                    print 'recv a arp req'
+                    dstmac = payload[6:12]
+                    dstip = payload[28:31]
+                    ip = nicutil.get_ip(self.nic_name)
+                    locmac = nicutil.get_mac(self.nic_name)
+                    if dstmac == locmac:
+                        print "pkg myself"
+                        return
+
+                    data = struct.pack("!6s6sH", dstmac, locmac, 0x0806)    
+                    #reply
+                    data += struct.pack("!2H2BH", 0x1, 0x800, 0x6, 0x4, 0x0002)    
+                    #sender mac , sender ip 
+                    data += struct.pack("!6s4s", locmac, ip)
+                    #target mac , target ip
+                    data += struct.pack("!6s4s", dstmac, dstip)
+                    #os.write(self.tun_fd, data)
+                    print "send arp reply:"
+                    for c in data:
+                        print "0x%.2x" %ord(c),
+                    print
+                    for i in range(0, 50):
+                        self.tb.txpath.send_pkt(data)
+                    return
+                    
             os.write(self.tun_fd, payload)
 
     def main_loop(self):
@@ -173,10 +255,10 @@ class cs_mac(object):
 
         FIXME: may want to check for EINTR and EAGAIN and reissue read
         """
-        min_delay = 0#0.001               # seconds
+        min_delay = 0.001               # seconds
 
         while 1:
-            payload = os.read(self.tun_fd, 1500)#10*1024)
+            payload = os.read(self.tun_fd, 10*1024)
             if not payload:
                 self.tb.txpath.send_pkt(eof=True)
                 break
@@ -184,16 +266,16 @@ class cs_mac(object):
             if self.verbose:
                 print "Tx: len(payload) = %4d" % (len(payload),)
                 for c in payload:
-                    print hex(ord(c)),
+                    print "0x%.2x" %ord(c),
                 print 
-            '''
+            
             delay = min_delay
             while self.tb.carrier_sensed():
                 sys.stderr.write('B')
                 time.sleep(delay)
                 if delay < 0.050:
                     delay = delay * 2       # exponential back-off
-            '''
+            
             for i in range(0, 50):
                 self.tb.txpath.send_pkt(payload)
 
@@ -228,7 +310,7 @@ def main():
     digital.ofdm_demod.add_options(parser, expert_grp)
     transmit_path.add_options(parser, expert_grp)
     receive_path.add_options(parser, expert_grp)
-
+    
     (options, args) = parser.parse_args ()
     if len(args) != 0:
         parser.print_help(sys.stderr)
@@ -251,7 +333,7 @@ def main():
         print "Note: failed to enable realtime scheduling"
 
     # instantiate the MAC
-    mac = cs_mac(tun_fd, verbose=True)
+    mac = cs_mac(tun_fd, verbose=True, name=options.nic_name)
 
 
     # build the graph (PHY)
