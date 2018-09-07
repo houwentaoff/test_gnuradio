@@ -46,6 +46,7 @@ from gnuradio import iio
 import os, sys
 import random, time, struct
 import socket
+import dpkt
 #print os.getpid()
 #raw_input('Attach and press enter')
 
@@ -65,6 +66,8 @@ IFF_TUN		= 0x0001   # tunnel IP packets
 IFF_TAP		= 0x0002   # tunnel ethernet frames
 IFF_NO_PI	= 0x1000   # don't pass extra packet info
 IFF_ONE_QUEUE	= 0x2000   # beats me ;)
+
+keepcount = 25
 
 def open_tun_interface(tun_device_filename, ifr_name):
     from fcntl import ioctl
@@ -114,7 +117,7 @@ class my_top_block(gr.top_block):
 
         self.samp_rate = samp_rate = 1000000
 
-        self.source = iio.pluto_source(options.dev_ip, options.rx_freq, samp_rate, long(options.bandwidth), 0x8000, True, True, True, "slow_attack", 64.0, '', True)
+        self.source = iio.pluto_source(options.dev_ip, options.rx_freq, samp_rate, long(options.bandwidth), 0xA000, True, True, True, "slow_attack", 64.0, '', True)
         
         """
         self.source = uhd_receiver(options.args,
@@ -124,7 +127,8 @@ class my_top_block(gr.top_block):
                                    options.spec, options.antenna,
                                    options.clock_source, options.verbose)
         """
-        self.sink = iio.pluto_sink(options.dev_ip, options.tx_freq, samp_rate, long(options.bandwidth), 0x8000, False, 10.0, '', True)
+        #0x8000
+        self.sink = iio.pluto_sink(options.dev_ip, options.tx_freq, samp_rate, long(options.bandwidth), 0xA000, False, 10.0, '', True)
         """self.sink = uhd_transmitter(options.args,
                                     options.bandwidth, options.tx_freq,
                                     options.lo_offset, options.tx_gain,
@@ -191,6 +195,89 @@ class cs_mac(object):
                 print "0x%.2x" % ord(c),
             print 
         if ok:
+            #new style
+            # is arp?
+            eth = dpkt.ethernet.Ethernet(payload)
+            if eth != None:
+                if isinstance(eth.data , dpkt.ip.IP):
+                    ip = eth.data 
+                    if isinstance(ip.data , dpkt.icmp.ICMP):
+                        icmp = ip.data 
+                        if icmp.type == dpkt.icmp.ICMP_ECHO:
+                            print 'icmp echo'
+                            locip = nicutil.get_ip(self.nic_name)
+                            locmac = nicutil.get_mac(self.nic_name)
+                            sip=socket.inet_ntoa(ip.src)
+                            dip=socket.inet_ntoa(ip.dst)
+                            print sip, '-->', dip
+                            # to me
+                            if eth.dst == locmac and ip.dst == locip:
+                                sendicmp = dpkt.icmp.ICMP(
+                                        type=0,
+                                        data=dpkt.icmp.ICMP.Echo(
+                                            id=icmp.data.id,
+                                            seq=icmp.data.seq,
+                                            data=icmp.data.data
+                                            )
+                                        )
+                                print 'icmp context:'
+                                for c in sendicmp.pack():
+                                    print "0x%.2x" % ord(c),
+                                print
+                                sendip = dpkt.ip.IP(id=ip.id, src=ip.dst,
+                                        dst = ip.src, data=sendicmp, 
+                                        p=dpkt.ip.IP_PROTO_ICMP)
+                                sendip.pack()
+                                sendeth = dpkt.ethernet.Ethernet(
+                                    dst=eth.src, src=eth.dst, 
+                                    type=dpkt.ethernet.ETH_TYPE_IP,
+                                    data=sendip)
+                                sendeth.pack()
+                                print 'send icmp reply'
+                                for c in sendeth.pack():
+                                    print "0x%.2x" % ord(c),
+                                print
+                                for i in range(0, keepcount):
+                                    self.tb.txpath.send_pkt(sendeth.pack())
+                                return
+
+                        elif icmp.type == dpkt.icmp.ICMP_ECHOREPLY:
+                            print 'icmp echo reply'
+                            sip=socket.inet_ntoa(ip.src)
+                            dip=socket.inet_ntoa(ip.dst)
+                            print sip, '-->', dip
+
+                if eth.type == dpkt.ethernet.ETH_TYPE_ARP:
+                    if isinstance(eth.data , dpkt.arp.ARP):
+                        print 'recv a arp '
+                        arp = eth.data
+                        sip=socket.inet_ntoa(arp.spa)
+                        dip=socket.inet_ntoa(arp.tpa)
+                        print sip, '-->', dip
+                        if arp.op == dpkt.arp.ARP_OP_REQUEST:
+                            print 'req'
+
+                            ip = nicutil.get_ip(self.nic_name)
+                            if arp.tpa == ip:
+                                locmac = nicutil.get_mac(self.nic_name)
+                                print "send arp reply:"
+                                eth2 = dpkt.ethernet.Ethernet(
+                                    dst=eth.src, src=locmac,
+                                    data=dpkt.arp.ARP(op=dpkt.arp.ARP_OP_REPLY,
+                                    sha=locmac, spa=arp.tpa, tha=arp.sha, tpa=arp.spa))
+                                print 'loc mac:'
+                                for c in locmac:
+                                    print "0x%.2x" % ord(c),
+                                print
+                                for c in eth2.pack():
+                                    print "0x%.2x" % ord(c),
+                                print
+                                for i in range(0, keepcount):
+                                    self.tb.txpath.send_pkt(eth2.pack())
+                                return
+                        elif arp.op == dpkt.arp.ARP_OP_REPLY:
+                            print 'reply'
+            """
             if ord(payload[12]) == 0x8 and ord(payload[13]) == 0x0 and ord(payload[23]) == 0x1 and ord(payload[34]) == 0x8: #icmp req
                 locmac = nicutil.get_mac(self.nic_name)
                 ip = nicutil.get_ip(self.nic_name)
@@ -213,7 +300,7 @@ class cs_mac(object):
                     for c in data:
                         print "0x%.2x" %ord(c),
                     print
-                    for i in range(0, 50):
+                    for i in range(0, keepcount):
                         self.tb.txpath.send_pkt(data)
                     return
 
@@ -242,10 +329,10 @@ class cs_mac(object):
                     for c in data:
                         print "0x%.2x" %ord(c),
                     print
-                    for i in range(0, 50):
+                    for i in range(0, keepcount):
                         self.tb.txpath.send_pkt(data)
                     return
-                    
+            """           
             os.write(self.tun_fd, payload)
 
     def main_loop(self):
@@ -276,7 +363,7 @@ class cs_mac(object):
                 if delay < 0.050:
                     delay = delay * 2       # exponential back-off
             
-            for i in range(0, 50):
+            for i in range(0, keepcount):
                 self.tb.txpath.send_pkt(payload)
 
 
