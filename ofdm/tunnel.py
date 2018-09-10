@@ -67,7 +67,7 @@ IFF_TAP		= 0x0002   # tunnel ethernet frames
 IFF_NO_PI	= 0x1000   # don't pass extra packet info
 IFF_ONE_QUEUE	= 0x2000   # beats me ;)
 
-keepcount = 25
+keepcount = 10
 
 def open_tun_interface(tun_device_filename, ifr_name):
     from fcntl import ioctl
@@ -117,7 +117,7 @@ class my_top_block(gr.top_block):
 
         self.samp_rate = samp_rate = 1000000
 
-        self.source = iio.pluto_source(options.dev_ip, options.rx_freq, samp_rate, long(options.bandwidth), 0xA000, True, True, True, "slow_attack", 64.0, '', True)
+        self.source = iio.pluto_source(options.dev_ip, options.rx_freq, samp_rate, long(options.bandwidth*2), 0xA000, True, True, True, "fast_attack", 64.0, '', True)
         
         """
         self.source = uhd_receiver(options.args,
@@ -152,6 +152,7 @@ class my_top_block(gr.top_block):
         """
         Set the center frequency we're interested in.
         """
+        print 'set freq:', target_freq
         self.u_snk.set_freq(target_freq)
         self.u_src.set_freq(target_freq)
         
@@ -190,149 +191,102 @@ class cs_mac(object):
         """
         if self.verbose:
             print "Rx: ok = %r  len(payload) = %4d" % (ok, len(payload))
+            if ok:
+                for c in payload:
+                    print "0x%.2x" % ord(c),
+                print 
         if ok:
-            for c in payload:
-                print "0x%.2x" % ord(c),
-            print 
-        if ok:
-            #new style
-            # is arp?
             eth = dpkt.ethernet.Ethernet(payload)
-            if eth != None:
-                if isinstance(eth.data , dpkt.ip.IP):
-                    ip = eth.data 
-                    if isinstance(ip.data , dpkt.icmp.ICMP):
-                        icmp = ip.data 
-                        if icmp.type == dpkt.icmp.ICMP_ECHO:
-                            print 'icmp echo'
-                            locip = nicutil.get_ip(self.nic_name)
-                            locmac = nicutil.get_mac(self.nic_name)
-                            sip=socket.inet_ntoa(ip.src)
-                            dip=socket.inet_ntoa(ip.dst)
-                            print sip, '-->', dip
-                            # to me
-                            if eth.dst == locmac and ip.dst == locip:
-                                sendicmp = dpkt.icmp.ICMP(
-                                        type=0,
-                                        data=dpkt.icmp.ICMP.Echo(
-                                            id=icmp.data.id,
-                                            seq=icmp.data.seq,
-                                            data=icmp.data.data
-                                            )
+            # ip
+            if isinstance(eth.data , dpkt.ip.IP):
+                ip = eth.data 
+                #icmp
+                if isinstance(ip.data , dpkt.icmp.ICMP):
+                    icmp = ip.data 
+                    locip = nicutil.get_ip(self.nic_name)
+                    locmac = nicutil.get_mac(self.nic_name)
+                    if icmp.type == dpkt.icmp.ICMP_ECHO:
+                        print 'icmp echo'
+                        sip=socket.inet_ntoa(ip.src)
+                        dip=socket.inet_ntoa(ip.dst)
+                        print sip, '-->', dip
+                        # to me
+                        if eth.dst == locmac and ip.dst == locip:
+                            sendicmp = dpkt.icmp.ICMP(
+                                    type=0,
+                                    data=dpkt.icmp.ICMP.Echo(
+                                        id=icmp.data.id,
+                                        seq=icmp.data.seq,
+                                        data=icmp.data.data
                                         )
+                                    )
+                            if self.verbose:
                                 print 'icmp context:'
                                 for c in sendicmp.pack():
                                     print "0x%.2x" % ord(c),
                                 print
-                                sendip = dpkt.ip.IP(id=ip.id, src=ip.dst,
-                                        dst = ip.src, data=sendicmp, 
-                                        p=dpkt.ip.IP_PROTO_ICMP)
-                                sendip.pack()
-                                sendeth = dpkt.ethernet.Ethernet(
-                                    dst=eth.src, src=eth.dst, 
-                                    type=dpkt.ethernet.ETH_TYPE_IP,
-                                    data=sendip)
-                                sendeth.pack()
+                            sendip = dpkt.ip.IP(id=ip.id, src=ip.dst,
+                                    dst = ip.src, data=sendicmp, 
+                                    p=dpkt.ip.IP_PROTO_ICMP)
+                            sendip.pack()
+                            sendeth = dpkt.ethernet.Ethernet(
+                                dst=eth.src, src=eth.dst, 
+                                type=dpkt.ethernet.ETH_TYPE_IP,
+                                data=sendip)
+                            sendeth.pack()
+                            if self.verbose:
                                 print 'send icmp reply'
                                 for c in sendeth.pack():
                                     print "0x%.2x" % ord(c),
                                 print
-                                for i in range(0, keepcount):
-                                    self.tb.txpath.send_pkt(sendeth.pack())
-                                return
+                            for i in range(0, keepcount):
+                                self.tb.txpath.send_pkt(sendeth.pack())
+                            return
+                        else:
+                            return
 
-                        elif icmp.type == dpkt.icmp.ICMP_ECHOREPLY:
-                            print 'icmp echo reply'
-                            sip=socket.inet_ntoa(ip.src)
-                            dip=socket.inet_ntoa(ip.dst)
-                            print sip, '-->', dip
-
-                if eth.type == dpkt.ethernet.ETH_TYPE_ARP:
-                    if isinstance(eth.data , dpkt.arp.ARP):
-                        print 'recv a arp '
-                        arp = eth.data
-                        sip=socket.inet_ntoa(arp.spa)
-                        dip=socket.inet_ntoa(arp.tpa)
+                    elif icmp.type == dpkt.icmp.ICMP_ECHOREPLY:
+                        print 'icmp echo reply'
+                        sip=socket.inet_ntoa(ip.src)
+                        dip=socket.inet_ntoa(ip.dst)
                         print sip, '-->', dip
-                        if arp.op == dpkt.arp.ARP_OP_REQUEST:
-                            print 'req'
-
-                            ip = nicutil.get_ip(self.nic_name)
-                            if arp.tpa == ip:
-                                locmac = nicutil.get_mac(self.nic_name)
-                                print "send arp reply:"
-                                eth2 = dpkt.ethernet.Ethernet(
-                                    dst=eth.src, src=locmac,
-                                    data=dpkt.arp.ARP(op=dpkt.arp.ARP_OP_REPLY,
-                                    sha=locmac, spa=arp.tpa, tha=arp.sha, tpa=arp.spa))
-                                print 'loc mac:'
-                                for c in locmac:
-                                    print "0x%.2x" % ord(c),
-                                print
-                                for c in eth2.pack():
-                                    print "0x%.2x" % ord(c),
-                                print
-                                for i in range(0, keepcount):
-                                    self.tb.txpath.send_pkt(eth2.pack())
-                                return
-                        elif arp.op == dpkt.arp.ARP_OP_REPLY:
-                            print 'reply'
-            """
-            if ord(payload[12]) == 0x8 and ord(payload[13]) == 0x0 and ord(payload[23]) == 0x1 and ord(payload[34]) == 0x8: #icmp req
-                locmac = nicutil.get_mac(self.nic_name)
+                        if locip == ip.src:
+                            return
+            #arp
+            elif isinstance(eth.data , dpkt.arp.ARP):
+                print 'recv a arp '
+                arp = eth.data
+                sip=socket.inet_ntoa(arp.spa)
+                dip=socket.inet_ntoa(arp.tpa)
+                print sip, '-->', dip
                 ip = nicutil.get_ip(self.nic_name)
-                dstmac = payload[:6]
-                srcmac = payload[6:12]
-                dstip = payload[30:34]
-                srcip = payload[26:30]
-                if dstmac == locmac and ip == dstip:#send to me
-                    data = struct.pack("!6s6sH", srcmac, dstmac, 0x0800)    
-                    data += payload[14:26]
-                    data += ip #26-30
-                    data += srcip #30-34
-                    data += chr(0x0) #34
-                    data += payload[35]
-                    (csum,) = struct.unpack("!H", payload[36:38])
-                    data += struct.pack("!H", 8+csum) #36 37
-                    if len(payload) > 38:
-                        data += payload[38:]
-                    print 'send icmp reply:'
-                    for c in data:
-                        print "0x%.2x" %ord(c),
-                    print
-                    for i in range(0, keepcount):
-                        self.tb.txpath.send_pkt(data)
-                    return
-
-            if ord(payload[12]) == 0x8 and ord(payload[13]) == 0x6: #arp
-                if ord(payload[16]) == 0x8 and ord(payload[17]) == 0x0 and ord(payload[20])==0x0 and ord(payload[21]) == 0x2:#ipv4 arp req
-                    print 'recv a arp reply'
-                if ord(payload[16]) == 0x8 and ord(payload[17]) == 0x0 and ord(payload[20])==0x0 and ord(payload[21]) == 0x1:#ipv4 arp req
-                    print 'recv a arp req'
-                    dstmac = payload[6:12]
-                    dstip = payload[28:31]
-                    ip = nicutil.get_ip(self.nic_name)
-                    locmac = nicutil.get_mac(self.nic_name)
-                    if dstmac == locmac:
-                        print "pkg myself"
+                if arp.op == dpkt.arp.ARP_OP_REQUEST:
+                    print 'req'
+                    # to me
+                    if arp.tpa == ip:
+                        locmac = nicutil.get_mac(self.nic_name)
+                        print "send arp reply:"
+                        eth2 = dpkt.ethernet.Ethernet(
+                            dst=eth.src, src=locmac,
+                            data=dpkt.arp.ARP(op=dpkt.arp.ARP_OP_REPLY,
+                            sha=locmac, spa=arp.tpa, tha=arp.sha, tpa=arp.spa))
+                        if self.verbose:
+                            print 'loc mac:'
+                            for c in locmac:
+                                print "0x%.2x" % ord(c),
+                            print
+                            for c in eth2.pack():
+                                print "0x%.2x" % ord(c),
+                            print
+                        for i in range(0, keepcount):
+                            self.tb.txpath.send_pkt(eth2.pack())
                         return
-
-                    data = struct.pack("!6s6sH", dstmac, locmac, 0x0806)    
-                    #reply
-                    data += struct.pack("!2H2BH", 0x1, 0x800, 0x6, 0x4, 0x0002)    
-                    #sender mac , sender ip 
-                    data += struct.pack("!6s4s", locmac, ip)
-                    #target mac , target ip
-                    data += struct.pack("!6s4s", dstmac, dstip)
-                    #os.write(self.tun_fd, data)
-                    print "send arp reply:"
-                    for c in data:
-                        print "0x%.2x" %ord(c),
-                    print
-                    for i in range(0, keepcount):
-                        self.tb.txpath.send_pkt(data)
-                    return
-            """           
+                    else:
+                        return
+                elif arp.op == dpkt.arp.ARP_OP_REPLY:
+                    print 'reply'
+                    if arp.spa == ip:
+                        return
             os.write(self.tun_fd, payload)
 
     def main_loop(self):
