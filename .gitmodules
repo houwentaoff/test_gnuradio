@@ -1,0 +1,12 @@
+[submodule "lwip-tap"]
+	path = lwip-tap
+	url = https://github.com/houwentaoff/lwip-tap.git
+[submodule "libiio"]
+	path = libiio
+	url = https://github.com/analogdevicesinc/libiio.git
+[submodule "libad9361-iio"]
+	path = libad9361-iio
+	url = https://github.com/analogdevicesinc/libad9361-iio.git
+[submodule "gr-iio"]
+	path = gr-iio
+	url = https://github.com/analogdevicesinc/gr-iio.git
