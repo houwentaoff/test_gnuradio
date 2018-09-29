@@ -176,6 +176,10 @@ class cs_mac(object):
                     print "0x%.2x" % ord(c),
                 print 
         if ok:
+            os.write(self.tun_fd, payload)
+        #if ok:
+        # use lwip replace icmp,arp
+        if False:
             eth = dpkt.ethernet.Ethernet(payload)
             # ip
             if isinstance(eth.data , dpkt.ip.IP):
